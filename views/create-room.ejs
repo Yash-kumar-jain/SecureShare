@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Sharing Room - SecureShare</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+  <style>
+    .gradient-text {
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Navigation -->
+  <nav class="bg-white shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <i class="fas fa-share-alt text-indigo-600 text-xl mr-2"></i>
+          <span class="text-xl font-bold gradient-text">SecureShare</span>
+        </div>
+        <div class="flex items-center">
+          <a href="/" class="text-gray-500 hover:text-gray-700 px-3 py-2">
+            <i class="fas fa-home text-xl"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-md mx-auto p-4">
+    <div class="bg-white rounded-xl shadow-md overflow-hidden mt-8">
+      <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
+        <h1 class="text-2xl font-bold flex items-center">
+          <i class="fas fa-plus-circle mr-2"></i> Create Sharing Room
+        </h1>
+      </div>
+
+      <div class="p-6">
+        <div class="text-center mb-6">
+          <div class="bg-blue-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-user-friends text-blue-600 text-3xl"></i>
+          </div>
+          <h2 class="text-xl font-semibold text-gray-800">Ready to Share Files</h2>
+          <p class="text-gray-600 mt-2">Create a secure room to share files directly with someone</p>
+        </div>
+
+        <button id="create-room-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+          <i class="fas fa-door-open mr-2"></i> Create Room
+        </button>
+
+        <div id="loading-spinner" class="hidden mt-4 text-center">
+          <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+          <p class="text-gray-600 mt-2">Creating secure room...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const createBtn = document.getElementById('create-room-btn');
+      const loadingSpinner = document.getElementById('loading-spinner');
+
+      createBtn.addEventListener('click', () => {
+        // Show loading spinner
+        createBtn.classList.add('hidden');
+        loadingSpinner.classList.remove('hidden');
+
+        // Generate a random room ID
+        const roomId = generateRoomId();
+        
+        // Redirect to the new room
+        setTimeout(() => {
+          window.location.href = `/${roomId}`;
+        }, 1000);
+      });
+
+      function generateRoomId() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < 8; i++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+      }
+    });
+  </script>
+</body>
+</html>

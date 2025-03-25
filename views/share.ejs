@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecureShare - Room <%= roomId %></title>
+  <!-- Use local Tailwind CSS -->
+  <link href="/css/tailwind.css" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+    }
+    .connection-pulse {
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .download-container {
+      position: relative;
+      overflow: hidden;
+    }
+    .download-progress {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--progress, 0%);
+      background: rgba(79, 70, 229, 0.15);
+      transition: height 0.3s ease-out;
+    }
+    
+    .status-waiting { color: #f59e0b; }
+    .status-active { color: #3b82f6; }
+    .status-success { color: #10b981; }
+    .status-error { color: #ef4444; }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .file-display {
+      animation: slideUp 0.3s ease-out forwards;
+    }
+
+    .file-history {
+      max-height: 300px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #6366f1 #e0e7ff;
+    }
+    .file-history::-webkit-scrollbar {
+      width: 6px;
+    }
+    .file-history::-webkit-scrollbar-track {
+      background: #e0e7ff;
+      border-radius: 3px;
+    }
+    .file-history::-webkit-scrollbar-thumb {
+      background-color: #6366f1;
+      border-radius: 3px;
+    }
+    
+    .room-id-display {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.375rem;
+      font-family: monospace;
+    }
+    
+    .gradient-text {
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <!-- Navigation -->
+  <nav class="bg-white shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <i class="fas fa-share-alt text-indigo-600 text-xl mr-2"></i>
+          <span class="text-xl font-bold gradient-text">SecureShare</span>
+        </div>
+        <div class="flex items-center">
+          <span class="room-id-display bg-indigo-600 text-white mr-4"><%= roomId %></span>
+          <a href="/" class="text-gray-500 hover:text-gray-700 px-3 py-2">
+            <i class="fas fa-home text-xl"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="max-w-md mx-auto p-4">
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+      <!-- Header -->
+      <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-5 text-white">
+        <div class="flex justify-between items-center">
+          <div>
+            <h1 class="text-2xl font-bold flex items-center">
+              <i class="fas fa-share-alt mr-2"></i> SecureShare
+            </h1>
+            <p class="text-blue-100 text-sm mt-1">Room: <span class="font-mono"><%= roomId %></span></p>
+          </div>
+          <button id="copy-link-btn" class="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm">
+            <i class="fas fa-copy mr-1"></i> Copy Link
+          </button>
+        </div>
+      </div>
+
+      <!-- Connection and File Transfer UI -->
+      <div class="p-5">
+        <!-- Connection Status -->
+        <div class="flex items-center mb-6 p-4 bg-gray-50 rounded-lg">
+          <div id="connection-icon" class="h-4 w-4 rounded-full bg-yellow-500 mr-3 connection-pulse"></div>
+          <div>
+            <p id="connection-status" class="font-medium">Waiting for connection...</p>
+            <p id="connection-detail" class="text-sm text-gray-600"></p>
+          </div>
+        </div>
+
+        <!-- File Transfer UI -->
+        <div id="sender-ui" class="hidden">
+          <div class="border-2 border-dashed border-blue-300 rounded-xl p-6 text-center mb-4 cursor-pointer hover:border-blue-400 transition"
+               id="drop-area">
+            <input type="file" id="file-input" class="hidden">
+            <label for="file-input" class="cursor-pointer">
+              <i class="fas fa-cloud-upload-alt text-4xl text-blue-500 mb-3"></i>
+              <p class="text-lg font-medium">Select file to share</p>
+              <p class="text-sm text-gray-500 mt-1">(Up to 10GB)</p>
+            </label>
+          </div>
+          
+          <div id="progress-container" class="hidden bg-gray-50 p-4 rounded-lg">
+            <div class="flex justify-between mb-1">
+              <span id="filename" class="font-medium truncate"></span>
+              <span id="transfer-speed" class="text-sm text-blue-500"></span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div id="progress-bar" class="h-full bg-blue-500 rounded-full" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between mt-1 text-sm text-gray-500">
+              <span id="progress-text">0%</span>
+              <span id="file-size"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Receiver UI -->
+        <div id="receiver-ui" class="hidden">
+          <div class="border-2 border-dashed border-indigo-300 rounded-xl p-6 text-center mb-4">
+            <div class="download-container w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4 relative">
+              <div class="download-progress"></div>
+              <i class="fas fa-download text-3xl text-indigo-600 relative z-10"></i>
+            </div>
+            <p class="text-lg font-medium">Ready to receive files</p>
+            <p id="receiver-status" class="text-sm text-gray-500 mt-1"></p>
+            
+            <!-- Receiver Progress Bar -->
+            <div id="receiver-progress-container" class="hidden mt-4">
+              <div class="flex justify-between mb-1">
+                <span id="receiver-filename" class="font-medium truncate"></span>
+                <span id="receiver-transfer-speed" class="text-sm text-indigo-500"></span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div id="receiver-progress-bar" class="h-full bg-indigo-500 rounded-full" style="width: 0%"></div>
+              </div>
+              <div class="flex justify-between mt-1 text-sm text-gray-500">
+                <span id="receiver-progress-text">0%</span>
+                <span id="receiver-file-size"></span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- File Display Panel -->
+          <div id="file-display-panel" class="hidden file-display bg-indigo-50 rounded-lg p-4 mb-4">
+            <div class="flex items-start">
+              <div class="bg-indigo-100 p-3 rounded-lg mr-3">
+                <i class="fas fa-file-alt text-indigo-600 text-xl"></i>
+              </div>
+              <div class="flex-1">
+                <h3 class="font-medium text-gray-800">File Received Successfully</h3>
+                <p id="received-filename" class="text-sm text-gray-600 truncate"></p>
+                <div class="flex justify-between mt-2 text-xs text-gray-500">
+                  <span id="received-file-size"></span>
+                  <span id="transfer-time"></span>
+                </div>
+                <div class="flex justify-between mt-3">
+                  <span id="average-speed" class="text-sm text-indigo-600"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Configuration
+      const rtcSettings = {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" }
+        ],
+        iceTransportPolicy: "all",
+        sdpSemantics: "unified-plan",
+        bundlePolicy: "max-bundle",
+        rtcpMuxPolicy: "require"
+      };
+      const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024; // 10GB
+      const CHUNK_SIZE = 16 * 1024; // 16KB chunks (reduced for better flow control)
+
+      // DOM Elements
+      const roomId = '<%= roomId %>';
+      const currentUrl = window.location.href;
+      const socket = io();
+      let peerConnection = null;
+      let dataChannel = null;
+      let isSender = false;
+      let fileChunks = [];
+      let receivedBytes = 0;
+      let fileSize = 0;
+      let fileName = '';
+      let startTime;
+      let lastUpdateTime = 0;
+      let receivedFileUrl = null;
+
+      // UI Elements
+      const connectionIcon = document.getElementById('connection-icon');
+      const connectionStatus = document.getElementById('connection-status');
+      const connectionDetail = document.getElementById('connection-detail');
+      const senderUI = document.getElementById('sender-ui');
+      const receiverUI = document.getElementById('receiver-ui');
+      const fileInput = document.getElementById('file-input');
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      const progressText = document.getElementById('progress-text');
+      const filenameElement = document.getElementById('filename');
+      const fileSizeElement = document.getElementById('file-size');
+      const transferSpeedElement = document.getElementById('transfer-speed');
+      const receiverStatus = document.getElementById('receiver-status');
+      const copyLinkBtn = document.getElementById('copy-link-btn');
+      
+      // New receiver elements
+      const receiverProgressContainer = document.getElementById('receiver-progress-container');
+      const receiverProgressBar = document.getElementById('receiver-progress-bar');
+      const receiverProgressText = document.getElementById('receiver-progress-text');
+      const receiverFilename = document.getElementById('receiver-filename');
+      const receiverFileSize = document.getElementById('receiver-file-size');
+      const receiverTransferSpeed = document.getElementById('receiver-transfer-speed');
+      const fileDisplayPanel = document.getElementById('file-display-panel');
+      const receivedFilename = document.getElementById('received-filename');
+      const receivedFileSize = document.getElementById('received-file-size');
+      const transferTime = document.getElementById('transfer-time');
+      const averageSpeed = document.getElementById('average-speed');
+      const openFileBtn = document.getElementById('open-file-btn');
+
+      // 1. Initialize Connection
+      initConnection();
+
+      function initConnection() {
+        console.log('[WebRTC] Initializing connection to room:', roomId);
+        setupEventListeners();
+        joinRoom();
+      }
+
+      function setupEventListeners() {
+        copyLinkBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(currentUrl);
+          showStatusMessage('Room link copied!', 'success');
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+        
+
+      }
+
+      function joinRoom() {
+        updateStatus('Joining room...', 'waiting');
+        socket.emit('join-room', roomId);
+        
+        socket.on('room-joined', ({ numUsers }) => {
+          console.log(`[Socket] Room joined with ${numUsers} user(s)`);
+          isSender = numUsers === 1;
+          updateStatus(isSender ? 'Waiting for receiver...' : 'Connecting to sender...', 'waiting');
+        });
+
+        socket.on('user-connected', (userId) => {
+          console.log('[Socket] Peer connected:', userId);
+          updateStatus('Establishing secure connection...', 'active');
+          setupWebRTC();
+        });
+
+        socket.on('room-full', () => {
+          console.log('[Socket] Room is full');
+          updateStatus('Room is full (max 2 users)', 'error');
+        });
+      }
+
+      function setupWebRTC() {
+        console.log('[WebRTC] Creating peer connection');
+        peerConnection = new RTCPeerConnection(rtcSettings);
+
+        // Set timeout for connection
+        const connectionTimeout = setTimeout(() => {
+          if (peerConnection.iceConnectionState !== 'connected') {
+            console.warn('[WebRTC] Connection taking longer than expected');
+            updateStatus('Securing connection...', 'active');
+          }
+        }, 2000);
+
+        peerConnection.onicecandidate = ({ candidate }) => {
+          if (candidate) {
+            console.log('[WebRTC] ICE Candidate generated:', candidate.candidate.substring(0, 40) + '...');
+            socket.emit('signal', { candidate, roomId });
+          }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+          console.log('[WebRTC] Connection state:', peerConnection.connectionState);
+          if (peerConnection.connectionState === 'connected') {
+            clearTimeout(connectionTimeout);
+            console.log('[WebRTC] Connection established successfully');
+            onConnectionSuccess();
+          } else if (peerConnection.connectionState === 'failed') {
+            updateStatus('Connection failed', 'error');
+          }
+        };
+
+        if (isSender) {
+          console.log('[WebRTC] Creating data channel as sender');
+          dataChannel = peerConnection.createDataChannel('fileTransfer', {
+            ordered: true,
+            maxRetransmits: 10
+          });
+          setupDataChannel(dataChannel);
+          createOffer();
+        } else {
+          console.log('[WebRTC] Setting up receiver data channel');
+          peerConnection.ondatachannel = ({ channel }) => {
+            dataChannel = channel;
+            setupDataChannel(channel);
+          };
+        }
+      }
+
+      function createOffer() {
+        peerConnection.createOffer()
+          .then(offer => {
+            console.log('[WebRTC] Offer created');
+            return peerConnection.setLocalDescription(offer);
+          })
+          .then(() => {
+            console.log('[WebRTC] Sending offer to peer');
+            socket.emit('signal', { offer: peerConnection.localDescription, roomId });
+          })
+          .catch(err => {
+            console.error('[WebRTC] Offer error:', err);
+            updateStatus('Connection error', 'error');
+          });
+      }
+
+      function setupDataChannel(channel) {
+        channel.onopen = () => {
+          console.log('[WebRTC] Data channel opened');
+          onConnectionSuccess();
+        };
+
+        channel.onmessage = handleFileReceive;
+        channel.onclose = () => console.log('[WebRTC] Data channel closed');
+        channel.onerror = (error) => {
+          console.error('Data channel error:', error);
+          updateStatus('Transfer error', 'error');
+        };
+      }
+
+      socket.on('signal', async ({ offer, answer, candidate }) => {
+        try {
+          if (offer) {
+            console.log('[WebRTC] Received offer from peer');
+            if (!peerConnection) {
+              console.log('[WebRTC] Creating new peer connection for offer');
+              setupWebRTC();
+            }
+            await handleOffer(offer);
+          } else if (answer) {
+            console.log('[WebRTC] Received answer from peer');
+            await handleAnswer(answer);
+          } else if (candidate) {
+            console.log('[WebRTC] Received ICE candidate from peer');
+            if (peerConnection) {
+              await handleCandidate(candidate);
+            } else {
+              console.warn('[WebRTC] Ignoring candidate - no peer connection');
+            }
+          }
+        } catch (err) {
+          console.error('[WebRTC] Signal error:', err);
+        }
+      });
+
+      async function handleOffer(offer) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        socket.emit('signal', { answer, roomId });
+      }
+
+      async function handleAnswer(answer) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+
+      async function handleCandidate(candidate) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+
+      function onConnectionSuccess() {
+        updateStatus('Connection established', 'success');
+        connectionIcon.classList.remove('connection-pulse', 'bg-yellow-500');
+        connectionIcon.classList.add('bg-green-500');
+        
+        if (isSender) {
+          connectionDetail.textContent = 'You can now send files';
+          senderUI.classList.remove('hidden');
+        } else {
+          connectionDetail.textContent = 'Ready to receive files';
+          receiverUI.classList.remove('hidden');
+          receiverStatus.textContent = 'Waiting for files...';
+        }
+      }
+
+      function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (file.size > MAX_FILE_SIZE) {
+          showStatusMessage(`File too large (max ${formatFileSize(MAX_FILE_SIZE)})`, 'error');
+          return;
+        }
+
+        filenameElement.textContent = file.name;
+        fileSizeElement.textContent = formatFileSize(file.size);
+        progressContainer.classList.remove('hidden');
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+
+        sendFile(file);
+      }
+
+      function sendFile(file) {
+        const fileReader = new FileReader();
+        let offset = 0;
+        startTime = Date.now();
+        lastUpdateTime = Date.now();
+        
+        // Track if we're waiting to send more data
+        let isSending = false;
+        let chunkQueue = [];
+        
+        // Send metadata first
+        dataChannel.send(JSON.stringify({
+          type: 'file-start',
+          name: file.name,
+          size: file.size
+        }));
+
+        fileReader.onload = (event) => {
+          isSending = false;
+          if (dataChannel.readyState !== 'open') return;
+          
+          // Check buffer status before sending
+          if (dataChannel.bufferedAmount > dataChannel.bufferedAmountLowThreshold) {
+            chunkQueue.push(event.target.result);
+            return;
+          }
+          
+          dataChannel.send(event.target.result);
+          offset += event.target.result.byteLength;
+          updateProgress(offset, file.size);
+          
+          if (offset < file.size) {
+            readNextChunk();
+          } else {
+            dataChannel.send(JSON.stringify({ type: 'file-end' }));
+            showStatusMessage('File sent successfully!', 'success');
+            setTimeout(() => {
+      window.location.href = "/";
+    }, 5000);
+          }
+        };
+
+        // Set buffer thresholds
+        dataChannel.bufferedAmountLowThreshold = 65536; // 64KB
+        
+        // Handle when buffer has space again
+        dataChannel.onbufferedamountlow = () => {
+          if (chunkQueue.length > 0) {
+            const chunk = chunkQueue.shift();
+            dataChannel.send(chunk);
+            offset += chunk.byteLength;
+            updateProgress(offset, file.size);
+            
+            if (offset < file.size && !isSending) {
+              isSending = true;
+              readNextChunk();
+            }
+          }
+        };
+
+        function readNextChunk() {
+          isSending = true;
+          const chunk = file.slice(offset, offset + CHUNK_SIZE);
+          fileReader.readAsArrayBuffer(chunk);
+        }
+
+        readNextChunk();
+      }
+
+      function updateProgress(offset, totalSize) {
+        const progress = Math.round((offset / totalSize) * 100);
+        progressBar.style.width = `${progress}%`;
+        progressText.textContent = `${progress}%`;
+        
+        const now = Date.now();
+        const elapsed = (now - startTime) / 1000;
+        const speed = (offset / elapsed / 1024).toFixed(1);
+        transferSpeedElement.textContent = `${speed} KB/s`;
+        
+        // Update more frequently for receiver if needed
+        if (now - lastUpdateTime > 200) { // Throttle updates
+          lastUpdateTime = now;
+        }
+      }
+
+      function handleFileReceive(event) {
+        try {
+          if (typeof event.data === 'string') {
+            const metadata = JSON.parse(event.data);
+            if (metadata.type === 'file-start') {
+              startTime = Date.now();
+              lastUpdateTime = Date.now();
+              fileSize = metadata.size;
+              fileName = metadata.name;
+              receivedBytes = 0;
+              fileChunks = [];
+              
+              // Show receiver progress UI
+              receiverStatus.textContent = `Receiving: ${fileName}`;
+              receiverFilename.textContent = fileName;
+              receiverFileSize.textContent = formatFileSize(fileSize);
+              receiverProgressContainer.classList.remove('hidden');
+              document.querySelector('.download-container').classList.add('bg-indigo-100');
+            } else if (metadata.type === 'file-end') {
+              const blob = new Blob(fileChunks);
+              receivedFileUrl = URL.createObjectURL(blob);
+              downloadFile(blob, fileName);
+              showFileDisplayPanel();
+            }
+          } else {
+            fileChunks.push(event.data);
+            receivedBytes += event.data.byteLength;
+            
+            // Update receiver progress
+            const progressPercent = Math.min(100, (receivedBytes / fileSize) * 100);
+            document.querySelector('.download-progress').style.setProperty('--progress', `${progressPercent}%`);
+            receiverProgressBar.style.width = `${progressPercent}%`;
+            receiverProgressText.textContent = `${Math.round(progressPercent)}%`;
+            
+            // Calculate transfer speed
+            const now = Date.now();
+            const elapsed = (now - startTime) / 1000;
+            const speed =  ((receivedBytes / elapsed / 1024) * 8).toFixed(1);
+            receiverTransferSpeed.textContent = `${speed} KB/s`;
+          }
+        } catch (error) {
+          console.error('File receive error:', error);
+          receiverStatus.textContent = 'Error receiving file';
+        }
+      }
+
+      function showFileDisplayPanel() {
+  const transferTimeMs = Date.now() - startTime;
+  const transferTimeSec = (transferTimeMs / 1000).toFixed(1);
+  const averageSpeedKBs = ((fileSize / transferTimeMs * 1000 / 1024) * 8).toFixed(1);
+
+  // Update file display panel
+  receivedFilename.textContent = fileName;
+  receivedFileSize.textContent = formatFileSize(fileSize);
+  transferTime.textContent = `${transferTimeSec}s`;
+  averageSpeed.textContent = `Avg: ${averageSpeedKBs} KB/s`;
+  
+  // Show the panel
+  receiverProgressContainer.classList.add('hidden');
+  fileDisplayPanel.classList.remove('hidden');
+
+  // Redirect to home page after 3 seconds
+  setTimeout(() => {
+    window.location.href = "/";
+  }, 3000);
+}
+
+      function downloadFile(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+        }, 100);
+      }
+
+      function updateStatus(text, type) {
+        connectionStatus.textContent = text;
+        connectionStatus.className = `font-medium status-${type}`;
+        
+        // Update icon
+        connectionIcon.className = 'h-4 w-4 rounded-full mr-3';
+        if (type === 'waiting') {
+          connectionIcon.classList.add('bg-yellow-500', 'connection-pulse');
+        } else if (type === 'active') {
+          connectionIcon.classList.add('bg-blue-500', 'connection-pulse');
+        } else if (type === 'success') {
+          connectionIcon.classList.add('bg-green-500');
+        } else {
+          connectionIcon.classList.add('bg-red-500');
+        }
+      }
+
+      function showStatusMessage(text, type) {
+        const message = document.createElement('div');
+        message.className = `fixed bottom-4 right-4 px-4 py-2 rounded-md shadow-lg text-white ${
+          type === 'success' ? 'bg-green-500' : 'bg-red-500'
+        }`;
+        message.textContent = text;
+        document.body.appendChild(message);
+        
+        setTimeout(() => {
+          message.remove();
+        }, 3000);
+      }
+
+      function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' bytes';
+        else if (bytes < 1048576) return (bytes /  1024).toFixed(1) + ' KB';
+        else if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+        else return (bytes / 1073741824).toFixed(1) + ' GB';
+      }
+    });
+  </script>
+</body>
+</html>

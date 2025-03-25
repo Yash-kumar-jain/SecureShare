@@ -1,0 +1,33 @@
+</main>
+<footer class="bg-white/80 backdrop-blur-sm border-t mt-12">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="md:flex md:items-center md:justify-between">
+            <div class="flex justify-center md:order-2 space-x-6">
+                <a href="#" class="text-gray-400 hover:text-gradient-start transition-colors">
+                    <i class="fab fa-github text-xl"></i>
+                </a>
+                <a href="#" class="text-gray-400 hover:text-gradient-start transition-colors">
+                    <i class="fab fa-twitter text-xl"></i>
+                </a>
+                <a href="#" class="text-gray-400 hover:text-gradient-start transition-colors">
+                    <i class="fas fa-envelope text-xl"></i>
+                </a>
+            </div>
+            <div class="mt-4 md:mt-0 md:order-1 text-center">
+                <p class="text-sm text-gray-500">
+                    &copy; <span id="current-year"><%= new Date().getFullYear() %></span> SecureShare. 
+                    All rights reserved.
+                </p>
+                <p class="text-xs text-gray-400 mt-1">
+                    <i class="fas fa-lock"></i> Files are transferred directly between devices - no server storage
+                </p>
+            </div>
+        </div>
+    </div>
+</footer>
+<script>
+    // Current year for copyright
+    document.getElementById('current-year').textContent = new Date().getFullYear();
+</script>
+</body>
+</html>
