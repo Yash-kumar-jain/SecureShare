@@ -21,6 +21,29 @@
       background-clip: text;
       color: transparent;
     }
+    /* Fixed error message styling */
+    .error-container {
+      height: 0;
+      position: relative;
+      z-index: 10;
+    }
+    .error-message {
+      transition: opacity 0.5s ease-out;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 28rem; /* md:max-w-md */
+      margin-bottom: 2rem; /* mb-8 */
+      visibility: hidden;
+    }
+    .error-message.show {
+      visibility: visible;
+    }
+    /* Prevent layout shift */
+    html {
+      scrollbar-gutter: stable;
+    }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -41,9 +64,24 @@
     </div>
   </nav>
 
-  <!-- Hero Section -->
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-    <div class="text-center">
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <!-- Error Message Container (always in DOM) -->
+    <div class="error-container">
+      <% if (msg && msg.length > 0) { %>
+        <div id="error-message" class="error-message show">
+          <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded" role="alert">
+            <div class="flex items-center">
+              <i class="fas fa-exclamation-circle mr-2"></i>
+              <span><%= msg %></span>
+            </div>
+          </div>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Hero Section -->
+    <div class="text-center mb-16">
       <h1 class="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
         Share Files <span class="gradient-text">Securely</span> & <span class="gradient-text">Instantly</span>
       </h1>
@@ -53,7 +91,7 @@
     </div>
 
     <!-- Main Options -->
-    <div class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
       <!-- Send Card -->
       <div class="bg-white rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg">
         <div class="p-6">
@@ -87,10 +125,16 @@
             Join a sharing session with a code to receive files directly from another device.
           </p>
           <div class="flex flex-col items-center">
-            <input type="text" id="room-code" placeholder="Enter room code" class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <button id="receive-btn" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
-              Join Room <i class="fas fa-sign-in-alt ml-2"></i>
-            </button>
+            <form action="/check-code" method="POST" class="w-full">
+              <input type="text" id="room-code" name="roomCode" placeholder="Enter room code" 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+              <div class="flex justify-center">
+                <button type="submit" id="receive-btn" 
+                      class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
+                  Join Room <i class="fas fa-sign-in-alt ml-2"></i>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -123,7 +167,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </main>
 
   <!-- Footer -->
   <footer class="bg-white border-t mt-12">
@@ -136,24 +180,27 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // Auto-hide error message after 3 seconds
+      const errorMessage = document.getElementById('error-message');
+      if (errorMessage) {
+        setTimeout(() => {
+          errorMessage.style.opacity = '0';
+          setTimeout(() => {
+            errorMessage.classList.remove('show');
+            errorMessage.style.display = 'none';
+          }, 500);
+        }, 3000);
+      }
+
       // Handle send button click
       document.getElementById('send-btn').addEventListener('click', () => {
         window.location.href = '/create-room';
       });
 
-      // Handle receive button click
-      document.getElementById('receive-btn').addEventListener('click', () => {
-        const roomCode = document.getElementById('room-code').value.trim();
-        if (roomCode) {
-          window.location.href = `/${roomCode}`;
-        } else {
-          alert('Please enter a room code');
-        }
-      });
-
-      // Allow pressing Enter in the room code input
+      // Handle Enter key in room code input
       document.getElementById('room-code').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
+          e.preventDefault(); // Prevent form submission if we want to handle it differently
           document.getElementById('receive-btn').click();
         }
       });
