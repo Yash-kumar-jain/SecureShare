@@ -52,7 +52,11 @@
           <p class="text-gray-600 mt-2">Create a secure room to share files directly with someone</p>
         </div>
 
-        <button id="create-room-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+        <form id="room-form" method="POST" action="/create-room-code" class="hidden">
+          <input type="hidden" id="room-id" name="room_id" value="">
+        </form>
+
+        <button id="create-room-btn" type="button" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
           <i class="fas fa-door-open mr-2"></i> Create Room
         </button>
 
@@ -68,6 +72,8 @@
     document.addEventListener('DOMContentLoaded', () => {
       const createBtn = document.getElementById('create-room-btn');
       const loadingSpinner = document.getElementById('loading-spinner');
+      const roomForm = document.getElementById('room-form');
+      const roomIdInput = document.getElementById('room-id');
 
       createBtn.addEventListener('click', () => {
         // Show loading spinner
@@ -77,10 +83,10 @@
         // Generate a random room ID
         const roomId = generateRoomId();
         
-        // Redirect to the new room
-        setTimeout(() => {
-          window.location.href = `/${roomId}`;
-        }, 1000);
+        // Set the room ID in the form and submit
+        roomIdInput.value = roomId;
+        roomForm.classList.remove('hidden');
+        roomForm.submit();
       });
 
       function generateRoomId() {

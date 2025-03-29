@@ -60,10 +60,26 @@ else{
 
 
 })
+app.post('/create-room-code',(req, res) => {
+let {room_id} = req.body;
+// console.log(room_id);
+
+  codes.push(room_id);
+  res.redirect(`/${room_id}`);
+  return;
+
+
+
+})
 
 app.get('/:roomId', (req, res) => {
   const roomId = req.params.roomId;
-  codes.push(roomId);
+  if ( codes.indexOf(roomId) === -1) {
+    req.flash("msg" , "Invalid room code")
+    res.redirect("/")
+    return;
+  }
+
   // console.log(codes);
   
   res.render('share', { roomId: req.params.roomId });
